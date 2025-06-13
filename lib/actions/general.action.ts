@@ -44,36 +44,64 @@ export async function createFeedback(params: CreateFeedbackParams){
             }),
             schema: feedbackSchema,
             prompt: `
-                    You are an AI interviewer analyzing a mock interview. Your task is to evaluate the candidate based on structured categories. Be thorough and detailed in your analysis. Don't be lenient with the candidate. If there are mistakes or areas for improvement, point them out.
-                    Transcript:
-                    ${formattedTranscript}
+                You are an AI interviewer evaluating a candidate after a mock interview. Your role is to provide a **critical, honest, and unforgiving** assessment of the candidate's performance.
 
-                    Please score the candidate from 0 to 100 in the following areas. Do not add categories other than the ones provided:
-                    - **Communication Skills**: Clarity, articulation, structured responses.
-                    - **Technical Knowledge**: Understanding of key concepts for the role.
-                    - **Problem-Solving**: Ability to analyze problems and propose solutions.
-                    - **Cultural & Role Fit**: Alignment with company values and job role.
-                    - **Confidence & Clarity**: Confidence in responses, engagement, and clarity.
-                    `,
-            system:
-                    "You are a professional interviewer analyzing a mock interview. Your task is to evaluate the candidate based on structured categories",
+                You must assign **numerical scores between 0 and 100** in the following categories, based strictly on performance. Do not inflate scores. A perfect score (100) must be reserved for truly exceptional performance only. An average candidate should receive around 50. Poor performance should be scored below 30. Be very selective with high scores.
+
+                Transcript:
+                ${formattedTranscript}
+
+                Categories to evaluate:
+                - **Communication Skills**: Clarity, articulation, structure in responses.
+                - **Technical Knowledge**: Depth and correctness of knowledge relevant to the role.
+                - **Problem-Solving**: Logical thinking, handling of complex issues, creativity in approach.
+                - **Cultural & Role Fit**: Attitude, alignment with company values, fit for the position.
+                - **Confidence & Clarity**: Confidence, fluency, and assertiveness during the interview.
+
+                Be direct and critical. If the candidate made mistakes or showed weakness, reflect that in the score.
+                Do not give the benefit of the doubt.
+            `,
+            system: "You are a rigorous, no-nonsense professional interviewer trained to identify even small flaws in a candidate's performance. Be analytical, strict, and realistic when scoring."
+
             });
 
-            const feedback = await db.collection('feedback').add({
-                interviewId,
-                userId,
-                totalScore,
-                categoryScores,
-                strengths,
-                areasForImprovement,
-                finalAssessment,
-                createdAt : new Date().toISOString()
-            })
+            console.log(totalScore, categoryScores, strengths, areasForImprovement, finalAssessment)
 
-            return {
-                success: true,
-                feedbackId: feedback.id
+            const feedbackSnapshot = await db.collection('feedback').where('interviewId', '==', interviewId).get();
+
+            if(feedbackSnapshot.empty){
+                const feedback = await db.collection('feedback').add({
+                    interviewId,
+                    userId,
+                    totalScore,
+                    categoryScores,
+                    strengths,
+                    areasForImprovement,
+                    finalAssessment,
+                    createdAt : new Date().toISOString()
+                })
+                return {
+                    success: true,
+                    feedbackId: feedback.id
+                }
+            } else{
+                const feedbackDoc = feedbackSnapshot.docs[0];
+                await db.collection('feedback').doc(feedbackDoc.id).update({
+                    totalScore,
+                    categoryScores,
+                    strengths,
+                    areasForImprovement,
+                    finalAssessment,
+                    createdAt: new Date().toISOString()
+                });
+                return {
+                    success: true,
+                    feedbackId: feedbackDoc.id
+                }
             }
+
+
+
     } catch (e) {
         console.error('Error saving feedback', e)
 
